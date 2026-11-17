@@ -1,0 +1,10 @@
+{
+  "name": "nadaum-eul-ipda",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "나다움을:입다 - 기관 신청서 접수 페이지 + Vercel 서버리스 백엔드",
+  "dependencies": {
+    "@upstash/redis": "^1.34.0"
+  }
+}
