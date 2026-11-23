@@ -16,8 +16,9 @@ export async function buildRows() {
   for (const raw of Object.values(all)) {
     const d = typeof raw === 'string' ? JSON.parse(raw) : raw;
     const base = { org: d.org, orgType: d.orgType, region: d.region, manager: d.manager, phone: d.phone, email: d.email };
-    if (d.under) { under += d.under.count || 0; rows.push(['속옷', Object.assign({}, base, d.under)]); }
-    if (d.diaper) { diaper += d.diaper.households || 0; rows.push(['기저귀', Object.assign({}, base, d.diaper)]); }
+    const key = String(d.email || '').trim().toLowerCase(); // 첨부파일 조회용
+    if (d.under) { under += d.under.count || 0; rows.push(['속옷', Object.assign({}, base, d.under, { key, track: 'under' })]); }
+    if (d.diaper) { diaper += d.diaper.households || 0; rows.push(['기저귀', Object.assign({}, base, d.diaper, { key, track: 'diaper' })]); }
   }
   rows.sort((a, b) => (b[1].submittedAt || '').localeCompare(a[1].submittedAt || ''));
   return { under, diaper, rows };
