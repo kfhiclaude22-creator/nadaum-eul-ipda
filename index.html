@@ -171,6 +171,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--teal);outline:none;bo
 .radios{display:flex;gap:10px;flex-wrap:wrap}
 .radios label{display:flex;align-items:center;gap:8px;border:1.5px solid var(--rule);border-radius:8px;padding:9px 14px;cursor:pointer;font-size:.9375rem}
 .radios label:has(input:checked){border-color:var(--teal);background:var(--teal-wash)}
+  [hidden]{display:none!important}
+input[type=file]{font:inherit;font-size:.875rem;color:var(--ink);background:var(--ground);border:1.5px dashed var(--rule);border-radius:8px;padding:10px;width:100%}
+.linkbtn{background:none;border:0;color:var(--teal);text-decoration:underline;cursor:pointer;padding:0;font:inherit}
 .consent{display:grid;gap:10px}
 .consent label{display:grid;grid-template-columns:auto 1fr;gap:10px;font-size:.9375rem;align-items:start}
 .consent input{margin-top:6px;accent-color:var(--teal);width:16px;height:16px}
@@ -514,6 +517,12 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
         <div class="f"><span class="lab">희망 지급 방식</span>
           <div class="radios"><label><input type="radio" name="pay" id="payP" value="ssg.com 포인트 상품권" checked> ssg.com 포인트 상품권</label><label><input type="radio" name="pay" id="payC" value="현금"> 현금</label></div>
         </div>
+        <fieldset id="cashDocs" hidden>
+          <legend>현금 지급 증빙 서류</legend>
+          <p class="hint">현금 지급을 원하시면 아래 두 서류를 올려 주세요. JPG·PNG·PDF 파일을 받습니다. 사진은 자동으로 크기를 줄여 올리고, PDF는 2.5MB 이하로 올려 주세요.</p>
+          <div class="f"><label for="fileBiz">사업자등록증 또는 고유번호증 <i>*</i></label><input type="file" id="fileBiz" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"><span class="hint" id="fileBizNote" hidden></span></div>
+          <div class="f"><label for="fileBank">통장사본 <i>*</i></label><input type="file" id="fileBank" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"><span class="hint" id="fileBankNote" hidden></span></div>
+        </fieldset>
 
         <fieldset>
           <legend>확인 사항</legend>
@@ -558,8 +567,8 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     </div>
     <div class="cta"><button class="btn ghost" type="button" id="csvBtn" hidden>CSV로 내려받기</button><span class="hint" id="adminNote" style="align-self:center"></span></div>
     <div class="tbl"><table>
-      <thead><tr><th>유형</th><th>기관명</th><th>유형/지역</th><th>담당자</th><th>인원·가구</th><th>상반기</th><th>지급</th><th>접수</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="8" class="empty">아직 접수된 신청서가 없습니다. 기관이 위 신청서를 제출하면 여기에 바로 나타납니다.</td></tr></tbody>
+      <thead><tr><th>유형</th><th>기관명</th><th>유형/지역</th><th>담당자</th><th>인원·가구</th><th>상반기</th><th>지급</th><th>서류</th><th>접수</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="9" class="empty">아직 접수된 신청서가 없습니다. 기관이 위 신청서를 제출하면 여기에 바로 나타납니다.</td></tr></tbody>
     </table></div>
   </div>
 </section>
@@ -633,6 +642,51 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     $('#tkCalc').textContent = k ? `100,000원 × ${k}${track==='under'?'명':'가구'}` : (track==='under' ? '지원 희망 인원을 입력하면 계산됩니다.' : '추천 가구 수를 입력하면 계산됩니다.');
   }
   form.addEventListener('input', calc);
+    /* ---------- 현금 지급 증빙 서류 ---------- */
+  const DOC_LABEL = { biz:'사업자등록증(고유번호증)', bank:'통장사본' };
+  function syncPay(){
+    const cash = (form.querySelector('input[name="pay"]:checked')||{}).value === '현금';
+    $('#cashDocs').hidden = !cash;
+  }
+  form.querySelectorAll('input[name="pay"]').forEach(r => r.addEventListener('change', syncPay));
+  function showPrevFiles(files){
+    [['biz','fileBizNote'],['bank','fileBankNote']].forEach(([k,id]) => {
+      const el = $('#'+id), f = files && files[k];
+      el.hidden = !f;
+      el.textContent = f ? `이전에 올린 파일: ${f.name} · 바꾸려면 새 파일을 고르세요.` : '';
+    });
+  }
+  function fileToB64(blob){
+    return new Promise((ok,no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = () => no(new Error('read')); r.readAsDataURL(blob); });
+  }
+  async function shrinkImage(file){
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((ok,no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('img')); i.src = url; });
+      const s = Math.min(1, 1800/Math.max(img.naturalWidth, img.naturalHeight));
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth*s); c.height = Math.round(img.naturalHeight*s);
+      const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0,0,c.width,c.height); x.drawImage(img,0,0,c.width,c.height);
+      return await new Promise((ok,no) => c.toBlob(b => b ? ok(b) : no(new Error('blob')), 'image/jpeg', 0.82));
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function readDocs(){
+    const out = {};
+    for (const [kind,id] of [['biz','fileBiz'],['bank','fileBank']]){
+      const f = $('#'+id).files[0];
+      if (!f) continue;
+      const name = f.name || kind;
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(name)){
+        if (f.size > 2.5*1024*1024) throw [id, `${DOC_LABEL[kind]} PDF가 2.5MB를 넘습니다. 휴대폰으로 찍은 사진(JPG)으로 올려 주세요.`];
+        out[kind] = { name, data: await fileToB64(f) };
+      } else if (/^image\/(jpeg|png)$/.test(f.type) || /\.(jpe?g|png)$/i.test(name)){
+        try { out[kind] = { name: name.replace(/\.[^.]+$/, '') + '.jpg', data: await fileToB64(await shrinkImage(f)) }; }
+        catch { throw [id, `${DOC_LABEL[kind]} 사진을 열지 못했습니다. 다른 JPG·PNG 파일로 올려 주세요.`]; }
+      } else {
+        throw [id, `${DOC_LABEL[kind]}는 JPG, PNG, PDF 파일만 올릴 수 있습니다.`];
+      }
+    }
+    return out;
+  }
 
   function collect(){
     const v = id => $('#'+id).value.trim();
@@ -660,6 +714,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
       if (d.households > 50) return ['households','추천은 50가구까지 받습니다.'];
     }
     if (!d.reason) return ['reason','신청 사유를 적어 주세요.'];
+        if (d.pay === '현금'){
+      const prev = (mine[track] && mine[track].files) || {};
+      if (!$('#fileBiz').files.length && !prev.biz) return ['fileBiz','현금 지급을 원하시면 사업자등록증(고유번호증)을 올려 주세요.'];
+      if (!$('#fileBank').files.length && !prev.bank) return ['fileBank','현금 지급을 원하시면 통장사본을 올려 주세요.'];
+    }
     if (!$('#c1').checked || !$('#c2').checked || (track==='diaper' && !$('#c3').checked)) return ['c1','확인 사항에 모두 체크해 주세요.'];
     return null;
   }
@@ -669,6 +728,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     if (track==='under') L.push(`지원 희망 인원: ${d.count}명 (8~13세 ${d.ages.a8_13} · 14~18세 ${d.ages.a14_18} · 19~24세 ${d.ages.a19_24})`, `상반기 지원: ${d.prev}`);
     else L.push(`추천 가구: ${d.households}가구 (0~11개월 ${d.months.m0_11} · 12~23개월 ${d.months.m12_23} · 24~35개월 ${d.months.m24_35})`, `주 사용 언어: ${d.langs||'-'}`, `기저귀 월 소요액 의견: ${d.diaperCost||'-'}`);
     L.push(`희망 지급 방식: ${d.pay}`, `신청 사유: ${d.reason}`);
+    if (d.pay === '현금') L.push('※ 사업자등록증(고유번호증)과 통장사본은 이메일에 첨부해 주세요.');
     return L.join('\n');
   }
 
@@ -678,6 +738,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     const set = (id,val) => { if (val !== undefined && val !== null && $('#'+id)) $('#'+id).value = val || ''; };
     ['org','orgType','region','manager','phone','email','reason'].forEach(k => set(k, d[k]));
     if (d.pay) form.querySelectorAll('input[name="pay"]').forEach(r => r.checked = r.value === d.pay);
+     syncPay();
     if (track==='under'){ set('count', d.count); if (d.prev) form.querySelectorAll('input[name="prev"]').forEach(r => r.checked = r.value === d.prev); if (d.ages){ set('ageA',d.ages.a8_13); set('ageB',d.ages.a14_18); set('ageC',d.ages.a19_24);} }
     else { set('households', d.households); set('langs', d.langs); set('diaperCost', d.diaperCost); if (d.months){ set('monA',d.months.m0_11); set('monB',d.months.m12_23); set('monC',d.months.m24_35);} }
   }
@@ -685,6 +746,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     const d = mine[track], note = $('#mineNote');
     if (d){ fill(d); note.hidden = false; note.textContent = `이전에 ${d.submittedAt ? new Date(d.submittedAt).toLocaleString('ko-KR') : ''}에 제출한 내용입니다. 고친 뒤 다시 제출하면 덮어씁니다.`; }
     else note.hidden = true;
+    showPrevFiles(d && d.files);
   }
   const lookupBtn = $('#lookupBtn');
   if (lookupBtn) lookupBtn.addEventListener('click', async () => {
@@ -709,15 +771,29 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     if (bad){ $('#err').textContent = bad[1]; const el = $('#'+bad[0]); el && el.focus(); return; }
     $('#err').textContent = '';
     const btn = $('#submitBtn'); btn.disabled = true; btn.textContent = '제출하는 중…';
+    const resetBtn = () => { btn.disabled = false; btn.textContent = track==='under' ? '신청서 제출' : '추천서 제출'; };
+    const showErr = (fid, msg) => { $('#err').textContent = msg; const el = $('#'+fid); el && el.focus(); resetBtn(); };
+    let files = null;
+    if (d.pay === '현금'){
+      try { files = await readDocs(); }
+      catch (ex){ const [fid,msg] = Array.isArray(ex) ? ex : ['fileBiz','파일을 처리하지 못했습니다. JPG, PNG, PDF 파일인지 확인해 주세요.']; return showErr(fid, msg); }
+    }
+    const payload = JSON.stringify(Object.assign({ track }, d, { files }));
+    if (payload.length > 4300000) return showErr('fileBiz', '첨부 파일 두 개를 합친 크기가 너무 큽니다. PDF 대신 휴대폰으로 찍은 사진(JPG)으로 올려 주세요.');
     let saved = false, serverMsg = '';
     try {
       const r = await fetch('/api/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(Object.assign({ track }, d))
+        body: payload
       });
       const j2 = await r.json().catch(() => ({}));
-      if (r.ok && j2.ok){ saved = true; d.submittedAt = j2.submittedAt; mine[track] = d; }
+      if (r.ok && j2.ok){
+        saved = true; d.submittedAt = j2.submittedAt; if (j2.files) d.files = j2.files; mine[track] = d;
+        $('#fileBiz').value = ''; $('#fileBank').value = '';
+      }
+      else if (r.status === 400 && /^file/.test(j2.field || '')) return showErr(j2.field, j2.message);
+      else if (r.status === 413) serverMsg = '첨부 파일이 너무 커서 저장하지 못했습니다. 사진(JPG)으로 다시 올려 주세요.';
       else { serverMsg = j2.message || ''; }
     } catch (err) { /* 네트워크 오류 — 아래 대체 안내로 처리 */ }
     btn.disabled = false; setTrack(track);
@@ -745,9 +821,32 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     $('#mUnder').textContent = `${j2.under} / 500명`; $('#bUnder').style.width = Math.min(100, j2.under/5) + '%';
     $('#mDiaper').textContent = `${j2.diaper} / 50가구`; $('#bDiaper').style.width = Math.min(100, j2.diaper*2) + '%';
     $('#adminNote').textContent = (j2.under > 500 ? '속옷 신청이 목표를 넘었습니다. 예비비로는 최대 14명까지 추가 선정할 수 있습니다. ' : '') + `신청서 ${j2.rows.length}건`;
-    $('#rows').innerHTML = j2.rows.length ? j2.rows.map(([k,d]) => `<tr><td>${k}</td><td>${esc(d.org)}</td><td>${esc(d.orgType)} · ${esc(d.region)}</td><td>${esc(d.manager)}<br><span class="hint">${esc(d.phone)} · ${esc(d.email)}</span></td><td class="n">${k==='속옷'?(d.count||0)+'명':(d.households||0)+'가구'}</td><td>${esc(d.prev||'-')}</td><td>${esc(d.pay)}</td><td class="n">${d.submittedAt?new Date(d.submittedAt).toLocaleDateString('ko-KR'):''}</td></tr>`).join('')
-      : '<tr><td colspan="8" class="empty">아직 접수된 신청서가 없습니다. 기관이 위 신청서를 제출하면 여기에 바로 나타납니다.</td></tr>';
+    $('#rows').innerHTML = j2.rows.length ? j2.rows.map(([k,d]) => `<tr><td>${k}</td><td>${esc(d.org)}</td><td>${esc(d.orgType)} · ${esc(d.region)}</td><td>${esc(d.manager)}<br><span class="hint">${esc(d.phone)} · ${esc(d.email)}</span></td><td class="n">${k==='속옷'?(d.count||0)+'명':(d.households||0)+'가구'}</td><td>${esc(d.prev||'-')}</td><td>${esc(d.pay)}</td><td>${docCell(d)}</td><td class="n">${d.submittedAt?new Date(d.submittedAt).toLocaleDateString('ko-KR'):''}</td></tr>`).join('')
+      : '<tr><td colspan="9" class="empty">아직 접수된 신청서가 없습니다. 기관이 위 신청서를 제출하면 여기에 바로 나타납니다.</td></tr>';
   }
+  const DOC_SHORT = { biz:'등록증', bank:'통장사본' };
+  const extOf = t => t === 'application/pdf' ? '.pdf' : (t === 'image/png' ? '.png' : '.jpg');
+  function docCell(d){
+    if (d.pay !== '현금') return '-';
+    return ['biz','bank'].map(k => {
+      const f = d.files && d.files[k];
+      return f ? `<button type="button" class="linkbtn" data-dl="${k}" data-key="${esc(d.key)}" data-tr="${esc(d.track)}" data-name="${esc(d.org + '_' + DOC_LABEL[k] + extOf(f.type))}">${DOC_SHORT[k]}</button>`
+               : `<span class="hint">${DOC_SHORT[k]} 없음</span>`;
+    }).join('<br>');
+  }
+  $('#rows').addEventListener('click', async e => {
+    const b = e.target.closest('button[data-dl]'); if (!b) return;
+    b.disabled = true;
+    try {
+      const qs = `email=${encodeURIComponent(b.dataset.key)}&track=${b.dataset.tr}&kind=${b.dataset.dl}`;
+      const r = await fetch('/api/admin-file?' + qs, { headers: { 'x-admin-key': sessionStorage.getItem('nadaumAdminKey') } });
+      if (!r.ok){ alert('파일을 내려받지 못했습니다.'); return; }
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement('a'); a.href = url; a.download = b.dataset.name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { alert('다운로드 중 오류가 발생했습니다.'); }
+    finally { b.disabled = false; }
+  });
   const adminBtn = $('#adminBtn');
   if (adminBtn) adminBtn.addEventListener('click', async () => {
     let key = sessionStorage.getItem('nadaumAdminKey');
